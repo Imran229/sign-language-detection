@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign Detection</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        video {
+            border-radius: 10px;
+            width: 480px;
+            height: 360px;
+            border: 2px solid #000;
+            margin-top: 20px;
+        }
+        #output {
+            font-size: 48px;
+            font-weight: bold;
+            margin-top: 15px;
+            color: #222;
+        }
+    </style>
+</head>
+<body>
+    <h1>🖐️ Real-Time Sign Detection</h1>
+    <video id="video" autoplay></video>
+    <div id="output">Prediction: <span id="prediction">-</span></div>
+
+    <script>
+        const video = document.getElementById('video');
+        const predictionSpan = document.getElementById('prediction');
+
+        // Access webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => console.error("Camera access denied:", err));
+
+        let lastSpoken = "";   // prevent repeating same voice constantly
+
+        function speak(text) {
+            if (text && text !== lastSpoken) {
+                lastSpoken = text;
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.rate = 0.8;   // slower voice for clarity
+                utter.pitch = 1.0;
+                window.speechSynthesis.cancel(); // stop previous speech
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        function sendFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const dataURL = canvas.toDataURL('image/jpeg');
+            fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: dataURL })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error! ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (data.prediction) {
+                    predictionSpan.textContent = data.prediction;
+                    speak(data.prediction);  // 🔊 voice output
+                }
+            })
+            .catch(err => console.error("Error:", err));
+        }
+
+        // Send frame every 700 ms
+        setInterval(sendFrame, 700);
+    </script>
+</body>
+</html>
